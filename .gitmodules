@@ -1,3 +1,4 @@
 [submodule "qemu"]
 	path = qemu
-	url = https://gitlab.com/qemu-project/qemu.git
+	url = git@github.com:De-Rosa/qemu.git
+	branch = jla
