@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# ./run.sh : build, then boot
-# ./run.sh --no-build
-# ./run.sh --reset : throw away the guest disk and start from a fresh image
+# ./run.sh                       build, then boot
+# ./run.sh --no-build            boot without building
+# ./run.sh --reset               throw away the guest disk and start fresh
+# ./run.sh -- <qemu options>     pass extra options to QEMU (e.g. -trace 'jla_*')
 set -euo pipefail
 
 # paths
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-QEMU_BUILD="$ROOT/qemu/build"
+QEMU_BUILD="${QEMU_BUILD:-$ROOT/qemu/build}"
 VM="$ROOT/vm"
 
 # guest image and disk
@@ -18,17 +19,20 @@ DISK_SIZE=20G
 
 # parse options
 build=1
-for arg in "$@"; do
-    case "$arg" in
+extra=()
+while [ $# -gt 0 ]; do
+    case "$1" in
         --no-build) build=0 ;;
         --reset) rm -f "$DISK" "$VARS" ;;
-        *) echo "unknown option: $arg" >&2; exit 1 ;;
+        --) shift; extra=("$@"); break ;;
+        *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
+    shift
 done
 
 # build qemu
 if [ "$build" -eq 1 ]; then
-    ninja -C "$QEMU_BUILD"
+    ninja -C "$QEMU_BUILD" qemu-system-aarch64 qemu-img
 fi
 
 mkdir -p "$VM"
@@ -52,11 +56,13 @@ if [ ! -f "$VARS" ]; then
 fi
 
 # pick accelerator for host
+MACHINE="virt"
 case "$(uname -s)-$(uname -m)" in
     Darwin-arm64)
         ACCEL=(-accel hvf -cpu host) ;;
     Linux-aarch64)
         if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+            MACHINE="virt,gic-version=3"
             ACCEL=(-accel kvm -cpu host)
         else
             echo "warning: /dev/kvm not accessible, using TCG (slow)" >&2
@@ -66,11 +72,11 @@ case "$(uname -s)-$(uname -m)" in
         echo "warning: host is not arm64, using TCG (slow)" >&2
         ACCEL=(-accel tcg -cpu max) ;;
 esac
-echo "Using ${ACCEL[*]}"
+echo "Using -M $MACHINE ${ACCEL[*]}"
 
 # boot guest with jla device
 exec "$QEMU_BUILD/qemu-system-aarch64" \
-    -M virt "${ACCEL[@]}" \
+    -M "$MACHINE" "${ACCEL[@]}" \
     -smp 4 -m 4G \
     -drive if=pflash,format=raw,readonly=on,file="$QEMU_BUILD/pc-bios/edk2-aarch64-code.fd" \
     -drive if=pflash,format=raw,file="$VARS" \
@@ -78,4 +84,5 @@ exec "$QEMU_BUILD/qemu-system-aarch64" \
     -netdev user,id=net0,hostfwd=tcp::2222-:22 \
     -device virtio-net-pci,netdev=net0 \
     -device jla \
-    -nographic
+    -nographic \
+    ${extra[@]+"${extra[@]}"}

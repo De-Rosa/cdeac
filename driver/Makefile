@@ -1,4 +1,5 @@
 obj-m := jla_drv.o
+ccflags-y += -I$(src)/../include
 
 KDIR ?= /lib/modules/$(shell uname -r)/build
 
