@@ -30,7 +30,7 @@ static void jla_submit(struct jla_dev *dev, u32 job_id, u64 duration,
 
   memset(j, 0, sizeof(*j));
   j->job_id = cpu_to_le32(job_id);
-  j->kernel_id = cpu_to_le32(0); // set to 0 for now
+  j->kernel_id = cpu_to_le16(0); // set to 0 for now
   j->flags = cpu_to_le16(0);
   j->duration = cpu_to_le64(duration);
   j->estimate_duration = cpu_to_le64(estimate_duration);
