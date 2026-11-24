@@ -1,3 +1,4 @@
+#include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
 #include <linux/module.h>
@@ -15,7 +16,7 @@ struct jla_dev {
   dma_addr_t sq_dma;
   u32 ring_size;
   u32 sq_tail;
-}
+};
 
 // devices this driver binds to
 static const struct pci_device_id jla_ids[] = {
@@ -24,7 +25,7 @@ MODULE_DEVICE_TABLE(pci, jla_ids);
 
 // write a job into ring + ring doorbell
 static void jla_submit(struct jla_dev *dev, u32 job_id, u64 duration,
-                       u64 hint) {
+                       u64 estimate_duration) {
   struct jla_job *j = &dev->sq[dev->sq_tail];
 
   memset(j, 0, sizeof(*j));
@@ -32,7 +33,7 @@ static void jla_submit(struct jla_dev *dev, u32 job_id, u64 duration,
   j->kernel_id = cpu_to_le32(0); // set to 0 for now
   j->flags = cpu_to_le16(0);
   j->duration = cpu_to_le64(duration);
-  j->hint = cpu_to_le64(hint);
+  j->estimate_duration = cpu_to_le64(estimate_duration);
 
   dev->sq_tail = (dev->sq_tail + 1) & (dev->ring_size - 1);
 
@@ -46,7 +47,7 @@ static void jla_test_jobs(struct jla_dev *dev) {
 
   msleep(20);
 
-  dev_info(&pdev->dev, "SQ_HEAD=%u, status=0x%08x\n",
+  dev_info(&dev->pdev->dev, "SQ_HEAD=%u, status=0x%08x\n",
            readl(dev->regs + JLA_REG_SQ_HEAD),
            readl(dev->regs + JLA_REG_STATUS));
 }
@@ -90,7 +91,7 @@ static int jla_probe(struct pci_dev *pdev, const struct pci_device_id *id) {
   }
 
   dev_info(&pdev->dev, "device probed, version 0x%08x\n",
-           readl(jd->regs + JLA_REG_VERSION));
+           readl(dev->regs + JLA_REG_VERSION));
 
   // allow DMA
   pci_set_master(pdev);
